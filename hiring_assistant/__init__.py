@@ -1,0 +1,1 @@
+"""TalentScout hiring assistant package."""
