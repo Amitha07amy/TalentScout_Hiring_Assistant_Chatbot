@@ -10,7 +10,7 @@ The chatbot:
 - Maintains coherent, context-aware conversation flow.
 - Handles fallback and conversation-ending intents.
 - Emails screening questions to the candidate (SMTP), so they can reply on email.
-- Stores anonymized submission records (Google Sheets on cloud, local JSONL fallback).
+- Stores simulated/anonymized submission records.
 
 ## 1. Project Overview
 
@@ -49,7 +49,6 @@ Core objective: build a prompt-driven assistant that gathers candidate informati
 - Streamlit
 - OpenAI Python SDK
 - python-dotenv
-- gspread + google-auth (Google Sheets persistence)
 - pytest
 
 ## 4. Installation
@@ -68,7 +67,6 @@ pip install -r requirements.txt
 cp .env.example .env
 # Add OPENAI_API_KEY in .env to enable LLM-powered question generation
 # Add SMTP_* and MAIL_* fields to send screening questions over email
-# Add GOOGLE_* fields to persist candidate submissions in Google Sheets
 ```
 
 ## 5. Run The App
@@ -116,24 +114,6 @@ MAIL_FROM=your-email@gmail.com
 MAIL_REPLY_TO=your-email@gmail.com
 ```
 
-## 6.2 Google Sheets Persistence Setup (Recommended for Streamlit Cloud)
-
-1. Create a Google Cloud service account and enable **Google Sheets API**.
-2. Create or choose a Google Sheet where you want rows appended.
-3. Share that sheet with your service-account email (Editor access).
-4. Copy your spreadsheet ID from the sheet URL.
-5. In Streamlit Cloud app settings, add these secrets:
-
-```toml
-GOOGLE_SHEETS_SPREADSHEET_ID = "your_spreadsheet_id"
-GOOGLE_SHEETS_WORKSHEET_NAME = "candidate_submissions"
-GOOGLE_SERVICE_ACCOUNT_JSON = "{\"type\":\"service_account\",...}"
-```
-
-Notes:
-- `GOOGLE_SERVICE_ACCOUNT_JSON` should be the full service-account JSON as a single-line string.
-- If Google Sheets config is missing or fails, the app falls back to local `data/candidate_submissions.jsonl`.
-
 ## 7. Prompt Design
 
 ### System Prompt Strategy
@@ -171,7 +151,7 @@ tests/
 
 ## 9. Data Privacy & Handling
 
-- Uses Google Sheets persistence when configured; otherwise falls back to local storage (`data/candidate_submissions.jsonl`).
+- Uses simulated local storage only (`data/candidate_submissions.jsonl`).
 - Contact information is not stored raw in records; email and phone are hashed.
 - Keep `.env` private and never commit API keys.
 - In real deployments, add encryption at rest, access controls, retention rules, and explicit consent flow for GDPR compliance.
