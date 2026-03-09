@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from hiring_assistant.models import CandidateProfile
+
+logger = logging.getLogger(__name__)
 
 
 class CandidateStore:
@@ -21,23 +24,25 @@ class CandidateStore:
     def _hash(value: str) -> str:
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
-    def _init_google_sheet(self) -> Optional[object]:
+    def _init_google_sheet(self) -> Optional[Any]:
         spreadsheet_id = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "").strip()
         service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
         worksheet_name = os.getenv("GOOGLE_SHEETS_WORKSHEET_NAME", "candidate_submissions").strip()
 
         if not spreadsheet_id or not service_account_json:
+            logger.info("Google Sheets not configured. Falling back to local JSONL.")
             return None
 
         try:
             import gspread
-            from gspread.exceptions import WorksheetNotFound
             from google.oauth2.service_account import Credentials
+            from gspread.exceptions import WorksheetNotFound
 
             credentials_info = json.loads(service_account_json)
             scopes = ["https://www.googleapis.com/auth/spreadsheets"]
             credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
             client = gspread.authorize(credentials)
+
             workbook = client.open_by_key(spreadsheet_id)
 
             try:
@@ -60,8 +65,12 @@ class CandidateStore:
                     ],
                     value_input_option="RAW",
                 )
+
+            logger.info("Google Sheets initialized successfully: worksheet=%s", worksheet_name)
             return sheet
-        except Exception:
+
+        except Exception as exc:
+            logger.exception("Google Sheets init failed. Falling back to local JSONL: %s", exc)
             return None
 
     def _redacted_record(self, candidate: CandidateProfile, metadata: Dict[str, str]) -> Dict[str, object]:
@@ -82,6 +91,7 @@ class CandidateStore:
     def _append_to_local_jsonl(self, record: Dict[str, object]) -> None:
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=True) + "\n")
+        logger.info("Submission saved to local JSONL: %s", self.path)
 
     def _append_to_google_sheet(self, record: Dict[str, object]) -> None:
         if self._sheet is None:
@@ -89,6 +99,7 @@ class CandidateStore:
 
         candidate = record["candidate"]
         metadata = record["metadata"]
+
         self._sheet.append_row(
             [
                 record["timestamp_utc"],
@@ -103,13 +114,16 @@ class CandidateStore:
             ],
             value_input_option="RAW",
         )
+        logger.info("Submission saved to Google Sheets.")
 
     def append_submission(self, candidate: CandidateProfile, metadata: Dict[str, str]) -> None:
         record = self._redacted_record(candidate, metadata)
+
         if self._sheet is not None:
             try:
                 self._append_to_google_sheet(record)
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("Google Sheets append failed. Falling back to local JSONL: %s", exc)
+
         self._append_to_local_jsonl(record)
