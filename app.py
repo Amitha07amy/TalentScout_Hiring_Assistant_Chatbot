@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 import streamlit as st
@@ -14,6 +15,18 @@ st.set_page_config(page_title="TalentScout Hiring Assistant", page_icon="🤖", 
 
 st.title("TalentScout Hiring Assistant")
 st.caption("Initial candidate screening powered by prompt-driven AI")
+
+# Map Streamlit secrets to environment variables so non-Streamlit modules can read them.
+for key in [
+    "GOOGLE_SHEETS_SPREADSHEET_ID",
+    "GOOGLE_SHEETS_WORKSHEET_NAME",
+    "GOOGLE_SERVICE_ACCOUNT_JSON",
+]:
+    if key in st.secrets and not os.getenv(key):
+        os.environ[key] = str(st.secrets[key])
+
+if "gcp_service_account" in st.secrets and not os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"):
+    os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"] = json.dumps(dict(st.secrets["gcp_service_account"]))
 
 if "engine" not in st.session_state:
     st.session_state.engine = HiringAssistantEngine()
@@ -37,9 +50,13 @@ with st.sidebar:
     smtp_set = "Yes" if all(
         os.getenv(k) for k in ["SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "MAIL_FROM"]
     ) else "No"
+    sheets_set = "Yes" if all(
+        os.getenv(k) for k in ["GOOGLE_SHEETS_SPREADSHEET_ID", "GOOGLE_SERVICE_ACCOUNT_JSON"]
+    ) else "No"
     st.write(f"OpenAI model: `{model}`")
     st.write(f"OPENAI_API_KEY set: `{key_set}`")
     st.write(f"SMTP configured: `{smtp_set}`")
+    st.write(f"Google Sheets configured: `{sheets_set}`")
     st.write("If API key is not set, the app uses curated fallback questions.")
     if st.button("Start New Conversation"):
         st.session_state.state = ConversationState()
